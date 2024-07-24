@@ -13,24 +13,36 @@ class House(models.Model):
 
 class Apartment(models.Model):
     number = models.IntegerField()
-    house = models.ForeignKey(House, on_delete=models.CASCADE)
+    house = models.ForeignKey(
+        House, on_delete=models.CASCADE, related_name="apartments"
+    )
     area = models.DecimalField(max_digits=5, decimal_places=2)
 
 
 class Rate(models.Model):
-    rate_type = models.CharField(max_length=10, choices=RateType)
+    rate_type = models.CharField(max_length=10, choices=RateType, unique=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
 
 
 class Counter(models.Model):
-    apartment = models.ForeignKey(Apartment, on_delete=models.CASCADE)
+    apartment = models.ForeignKey(
+        Apartment, on_delete=models.CASCADE, related_name="counters"
+    )
     rate_type = models.CharField(max_length=10, choices=RateType)
+
+    class Meta:
+        unique_together = (
+            "apartment",
+            "rate_type",
+        )
 
 
 class CounterReading(models.Model):
-    counter = models.ForeignKey(Counter, on_delete=models.CASCADE)
+    counter = models.ForeignKey(
+        Counter, on_delete=models.CASCADE, related_name="readings"
+    )
     reading = models.DecimalField(max_digits=10, decimal_places=2)
-    date = models.DateField()
+    date = models.DateField(auto_now=True)
     bill = models.DecimalField(max_digits=10, decimal_places=2, null=True)
 
 

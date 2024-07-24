@@ -9,15 +9,37 @@ from .models import (
 )
 
 
+class CounterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Counter
+        fields = ["id", "rate_type"]
+
+
+class ApartmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Apartment
+        fields = ["id", "number", "area"]
+
+
+class ApartmentListSerializer(serializers.ModelSerializer):
+    counters = CounterSerializer(many=True)
+
+    class Meta:
+        model = Apartment
+        fields = "__all__"
+
+
 class HouseSerializer(serializers.ModelSerializer):
     class Meta:
         model = House
         fields = "__all__"
 
 
-class ApartmentSerializer(serializers.ModelSerializer):
+class HouseListSerializer(serializers.ModelSerializer):
+    apartments = ApartmentSerializer(many=True)
+
     class Meta:
-        model = Apartment
+        model = House
         fields = "__all__"
 
 
@@ -27,13 +49,13 @@ class RateSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-class CounterSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Counter
-        fields = "__all__"
-
-
 class CounterReadingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CounterReading
+        fields = ["reading"]
+
+
+class CounterReadingListSerializer(serializers.ModelSerializer):
     class Meta:
         model = CounterReading
         fields = "__all__"
