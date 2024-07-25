@@ -1,0 +1,8 @@
+Django
+drf-yasg
+django-rest-framework
+drf-nested-routers
+django_celery_results
+psycopg2
+celery
+redis

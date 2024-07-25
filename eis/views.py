@@ -1,13 +1,15 @@
 import datetime
-from rest_framework.viewsets import ModelViewSet
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import mixins, viewsets
 from django.db.utils import IntegrityError
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg.openapi import Parameter, IN_QUERY
 from .serializers import (
     ApartmentSerializer,
     ApartmentListSerializer,
     ApartmentBillSerializer,
+    BillProcessSerializer,
     RateSerializer,
     HouseSerializer,
     HouseListSerializer,
@@ -22,8 +24,9 @@ from .models import (
     CounterReading,
     ApartmentBill,
     Rate,
+    BillProcess,
 )
-from .task import calculate_bills
+from .task import calculate_bills_task
 
 
 class CRUDViewSet(
@@ -46,9 +49,81 @@ class HouseViewSet(CRUDViewSet):
         else:
             return HouseSerializer
 
+    @action(detail=True, methods=["GET"])
+    @swagger_auto_schema(
+        manual_parameters=[
+            Parameter(
+                "year",
+                IN_QUERY,
+                type="int",
+            ),
+            Parameter("month", IN_QUERY, type="int"),
+        ],
+    )
+    def calculate_bills(self, request, pk: int):
+
+        year_str = request.GET.get("year")
+        month_str = request.GET.get("month")
+        if not year_str or not month_str:
+            return Response({"error": "No year and month parameters"}, status=400)
+        try:
+            year = int(year_str)
+            month = int(month_str)
+        except ValueError:
+            return Response(
+                {"error": "Bad format of year and month parameters"}, status=400
+            )
+        house = House.objects.get(id=pk)
+        date = datetime.date(year=year, month=month, day=1)
+        calculation_task = BillProcess(house=house, date=date)
+        calculation_task.save()
+        calculate_bills_task.delay(pk, date)
+        bill_process_serializers = BillProcessSerializer(calculation_task)
+        return Response(bill_process_serializers.data, status=201)
+
+    @action(detail=True, methods=["GET"])
+    @swagger_auto_schema(
+        manual_parameters=[
+            Parameter(
+                "year",
+                IN_QUERY,
+                type="int",
+            ),
+            Parameter("month", IN_QUERY, type="int"),
+        ],
+    )
+    def get_bills(self, request, pk: int, *args, **kwargs):
+        year_str = request.GET.get("year")
+        month_str = request.GET.get("month")
+        if not year_str or not month_str:
+            return Response({"error": "No year and month parameters"}, status=400)
+        try:
+            year = int(year_str)
+            month = int(month_str)
+        except ValueError:
+            return Response(
+                {"error": "Bad format of year and month parameters"}, status=400
+            )
+        date = datetime.date(year=year, month=month, day=1)
+        apartment_bill = ApartmentBillSerializer(
+            data=ApartmentBill.objects.filter(apartment__house__id=pk, date=date),
+            many=True,
+        )
+        apartment_bill.is_valid()
+        return Response(apartment_bill.data, status=200)
+
+    @action(detail=True, methods=["GET"])
+    def get_bill_process(self, request, pk: int, *args, **kwargs):
+        processes = BillProcessSerializer(
+            data=BillProcess.objects.filter(house__id=pk), many=True
+        )
+        processes.is_valid()
+        return Response(processes.data, status=200)
+
 
 class ApartmentsViewSet(CRUDViewSet):
-    queryset = Apartment.objects.all().select_related("house")
+    def get_queryset(self):
+        return Apartment.objects.filter(house__id=self.kwargs["house_pk"])
 
     def get_serializer_class(self):
         if self.action in ["list", "retrieve"]:
@@ -67,9 +142,40 @@ class ApartmentsViewSet(CRUDViewSet):
         result = ApartmentSerializer(apartment)
         return Response(result.data, status=201)
 
+    @action(detail=True, methods=["GET"])
+    @swagger_auto_schema(
+        manual_parameters=[
+            Parameter(
+                "year",
+                IN_QUERY,
+                type="int",
+            ),
+            Parameter("month", IN_QUERY, type="int"),
+        ],
+    )
+    def get_bill(self, request, pk: int, *args, **kwargs):
+        year_str = request.GET.get("year")
+        month_str = request.GET.get("month")
+        if not year_str or not month_str:
+            return Response({"error": "No year and month parameters"}, status=400)
+        try:
+            year = int(year_str)
+            month = int(month_str)
+        except ValueError:
+            return Response(
+                {"error": "Bad format of year and month parameters"}, status=400
+            )
+        date = datetime.date(year=year, month=month, day=1)
+        apartment_bill = ApartmentBillSerializer(
+            ApartmentBill.objects.filter(apartment__id=pk, date=date).first()
+        )
+        return Response(apartment_bill.data, status=200)
+
 
 class CountersViewSet(CRUDViewSet):
-    queryset = Counter.objects.all().select_related("apartment")
+    def get_queryset(self):
+        return Counter.objects.filter(apartment__id=self.kwargs["apartment_pk"])
+
     serializer_class = CounterSerializer
 
     def create(self, request, apartment_pk: int, *args, **kwargs):
@@ -94,7 +200,8 @@ class RateViewSet(CRUDViewSet):
 
 
 class CounterReadingsViewSet(CRUDViewSet):
-    queryset = CounterReading.objects.all().select_related("counter")
+    def get_queryset(self):
+        return CounterReading.objects.filter(counter__id=self.kwargs["counter_pk"])
 
     def get_serializer_class(self):
         if self.action in ["list", "retrieve"]:
@@ -111,14 +218,3 @@ class CounterReadingsViewSet(CRUDViewSet):
         counter_reading.save()
         result = CounterReadingListSerializer(counter_reading)
         return Response(result.data, status=201)
-
-
-class TestView(viewsets.GenericViewSet):
-    queryset = Rate.objects.all()
-
-    def list(self, request):
-        result = calculate_bills(1, datetime.date(year=2024, month=7, day=1))
-        answer = []
-        for i in result:
-            answer.append(ApartmentBillSerializer(i).data)
-        return Response(answer, status=200)

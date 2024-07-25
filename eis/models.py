@@ -7,6 +7,11 @@ class RateType(models.TextChoices):
     HOUSEHOLD = "HOUSEHOLD"
 
 
+class ProcessStatus(models.TextChoices):
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+
+
 class House(models.Model):
     address = models.CharField(max_length=250, unique=True)
 
@@ -50,3 +55,19 @@ class ApartmentBill(models.Model):
     apartment = models.ForeignKey(Apartment, on_delete=models.CASCADE)
     date = models.DateField()
     total_bill = models.DecimalField(max_digits=10, decimal_places=2)
+
+
+class BillProcess(models.Model):
+    house = models.ForeignKey(
+        House, on_delete=models.CASCADE, related_name="bill_processes"
+    )
+    status = models.CharField(
+        max_length=11, choices=ProcessStatus, default="IN_PROGRESS"
+    )
+    date = models.DateField()
+
+    class Meta:
+        unique_together = (
+            "house",
+            "date",
+        )

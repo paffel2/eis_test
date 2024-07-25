@@ -6,6 +6,7 @@ from .models import (
     CounterReading,
     ApartmentBill,
     Rate,
+    BillProcess,
 )
 
 
@@ -64,4 +65,10 @@ class CounterReadingListSerializer(serializers.ModelSerializer):
 class ApartmentBillSerializer(serializers.ModelSerializer):
     class Meta:
         model = ApartmentBill
+        fields = "__all__"
+
+
+class BillProcessSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BillProcess
         fields = "__all__"

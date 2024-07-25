@@ -1,20 +1,12 @@
 from datetime import timedelta, date
-
 from celery import shared_task
-
-from .models import (
-    House,
-    ApartmentBill,
-    Rate,
-)
-from .serializers import CounterReadingListSerializer
+from .models import House, ApartmentBill, Rate, BillProcess
 
 
-# @shared_task
-def calculate_bills(house_id, current_date):
+@shared_task
+def calculate_bills_task(house_id, current_date):
     house = House.objects.get(id=house_id)
     rates = Rate.objects.all()
-    result = []
     for apartment in house.apartments.all():
         household_rate = [x for x in rates if x.rate_type == "HOUSEHOLD"][0]
         total_bill = household_rate.price * apartment.area
@@ -36,8 +28,6 @@ def calculate_bills(house_id, current_date):
                 date__year=previous_month.year, date__month=previous_month.month
             ).first()
 
-            print(f"{current_value=}")
-
             delta = current_value.reading
             if previous_value:
                 delta = delta - previous_value.reading
@@ -48,6 +38,7 @@ def calculate_bills(house_id, current_date):
             current_value.save()
         apartment_bill.total_bill = total_bill
         apartment_bill.save()
-        result.append(apartment_bill)
-    print(result)
-    return result
+    process = BillProcess.objects.filter(date=current_date, house__id=house_id).first()
+    process.status = "COMPLETE"
+    process.save()
+    print("Calculation complete")

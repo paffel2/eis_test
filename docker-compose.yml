@@ -1,0 +1,50 @@
+version: "3.9"
+
+services:
+  eis_database:
+    image: postgres:15
+    container_name: eis_database
+    env_file:
+    - env_template
+    healthcheck:
+      test: "pg_isready -h eis_database"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+    -  5433:5432
+
+  server:
+    build:
+      dockerfile: Dockerfile
+      context: .
+    container_name: eis_test_server
+    env_file:
+    - env_template
+    depends_on:
+      eis_database:
+        condition: service_healthy
+    command: >
+      bash -c "python3 manage.py migrate && python3 manage.py runserver 0.0.0.0:8000"
+    ports:
+    - 8000:8000
+    
+  redis:
+    image: redis:latest
+    restart: always
+    ports:
+      - 6379:6379
+
+  celery:
+    build:
+      dockerfile: Dockerfile
+      context: .
+    container_name: 'eis_test_celery'
+    command: bash -c "celery -A eis_test worker -l info"
+    env_file:
+    - env_template
+    depends_on:
+      - server
+      - redis
+      - eis_database
+    restart: always
